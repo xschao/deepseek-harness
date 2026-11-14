@@ -33,6 +33,14 @@
     askCooldownMs: 3000
     askMaxPerMinute: 10
 
+# 技能发现根：本仓库 .claude 下的本地 skill（含 dsh-extension）。
+# 必须指向父目录：provider 在每个根下按 <name>/SKILL.md 找条目，
+# 指到 .claude/dsh-extension 会扫到 0 个技能且不报错。
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - 'F:/AITools/deepseek/deepseek-harness-master/.claude'
+
 # 默认 Agent 模型（deepseek-official 走 DEEPSEEK_API_KEY，凭据在 ~/.dsh/.credentials.yaml）。
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
