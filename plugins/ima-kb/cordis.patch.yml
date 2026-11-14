@@ -1,0 +1,10 @@
+# Adds the IMA 知识库 host plugin: /api/ima/* HTTP 路由（状态、文档列表、问答、上传、改名、删除）。
+# robotType: 5 = 知识库模式（默认）；10000 = IMA 通用问答。
+- insert:
+    - id: ima-kb
+      name: '@deepseek-ai/dsh-ima-kb'
+      inject: [webServer, credentials]
+      config:
+        robotType: 5
+        requestTimeoutMs: 300000
+        maxUploadBytes: 26214400
