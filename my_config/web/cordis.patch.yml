@@ -1,0 +1,28 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+# ima-copilot: robotType 5 = knowledge-base mode; set 10000 in the bundle patch for IMA general assistant mode.
+- insert:
+    - id: mcp-ima-kb
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ima
+        transport: stdio
+        command: 'F:\AITools\deepseek\node-v24.19.0-win-x64\node.exe'
+        args:
+          - 'F:\AITools\deepseek\tools\ima-mcp-server.mjs'
+        cwd: 'F:\AITools\deepseek'
+        toolCallTimeoutMs: 240000
+        failOnStartupError: false
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-pro
+    reasoningEffort: max
+
+# mcp-ima-kb: +folderId 参数（写入指定文件夹），2026-11-12 15:44
