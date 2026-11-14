@@ -2,7 +2,7 @@
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
-    "@deepseek-ai/dsh-ima-kb": "file:F:/AITools/deepseek/deepseek-harness-master/plugins/ima-kb"
+    "@deepseek-ai/dsh-ima-kb": "file:../../plugins/ima-kb"
   },
   "dsh": {
     "profile": {

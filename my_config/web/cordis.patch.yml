@@ -7,17 +7,18 @@
     welcomeNoticeVersion: 2026-09-28.1
 
 # IMA 知识库 MCP（工具层问答，供 Agent 调用）。
-# 注意：node.exe 与 ima-mcp-server.mjs 为本机绝对路径，换环境需同步调整。
+# 使用 DSH 自带的 node（process.execPath）与插件包内的 tools/ima-mcp-server.mjs；
+# 路径按 DSH_HOME 自动解析（默认 ~/.dsh），换机器无需改绝对路径。
 - insert:
     - id: mcp-ima-kb
       name: '@deepseek-ai/dsh-mcp-client'
       config:
         serverName: ima
         transport: stdio
-        command: 'F:\AITools\deepseek\node-v24.19.0-win-x64\node.exe'
+        command: !!js process.execPath
         args:
-          - 'F:\AITools\deepseek\tools\ima-mcp-server.mjs'
-        cwd: 'F:\AITools\deepseek'
+          - !!js (process.env.DSH_HOME || ((process.env.USERPROFILE || process.env.HOME) + '/.dsh')) + '/profiles/web/node_modules/@deepseek-ai/dsh-ima-kb/tools/ima-mcp-server.mjs'
+        cwd: !!js process.cwd()
         toolCallTimeoutMs: 240000
         failOnStartupError: false
 
@@ -29,6 +30,8 @@
     requestTimeoutMs: 300000
     maxUploadBytes: 26214400
     askIntervalMs: 4000
+    askCooldownMs: 3000
+    askMaxPerMinute: 10
 
 # 默认 Agent 模型（deepseek-official 走 DEEPSEEK_API_KEY，凭据在 ~/.dsh/.credentials.yaml）。
 - id: agent-default-model

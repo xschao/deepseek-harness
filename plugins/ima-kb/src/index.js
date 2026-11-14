@@ -25,7 +25,9 @@ const Config = z.object({
 	requestTimeoutMs: z.number().step(1).min(1).default(300000),
 	maxUploadBytes: z.number().step(1).min(1).default(25 * 1024 * 1024),
 	kbNameCacheMs: z.number().step(1).min(1).default(600000),
-	askIntervalMs: z.number().step(1).min(0).default(4000)
+	askIntervalMs: z.number().step(1).min(0).default(4000),
+	askCooldownMs: z.number().step(1).min(0).default(3000),
+	askMaxPerMinute: z.number().step(1).min(1).default(10)
 });
 
 export const inject = ["webServer", "credentials"];
@@ -100,7 +102,9 @@ function normalizeConfig(config) {
 		requestTimeoutMs: readCompatible(source?.requestTimeoutMs) ?? 300000,
 		maxUploadBytes: readCompatible(source?.maxUploadBytes) ?? 25 * 1024 * 1024,
 		kbNameCacheMs: readCompatible(source?.kbNameCacheMs) ?? 600000,
-		askIntervalMs: readCompatible(source?.askIntervalMs) ?? 4000
+		askIntervalMs: readCompatible(source?.askIntervalMs) ?? 4000,
+		askCooldownMs: readCompatible(source?.askCooldownMs) ?? 3000,
+		askMaxPerMinute: readCompatible(source?.askMaxPerMinute) ?? 10
 	};
 }
 
@@ -112,6 +116,10 @@ class ImaApi {
 		this.config = normalizeConfig(config);
 		this.session = null;
 		this.kbCache = null;
+		// 问答节流：串行化 + 冷却间隔 + 每分钟上限，避免触发 IMA 的「提问太快」限流。
+		this.askChain = Promise.resolve();
+		this.lastAskAt = 0;
+		this.askTimestamps = [];
 	}
 	/** 读取当前凭证（每次现取，不回显给浏览器）。 */
 	async credentials() {
@@ -160,7 +168,8 @@ class ImaApi {
 				/* 名称发现失败时退回 id 作为名称 */
 			}
 		}
-		this.kbCache = { names, expiresAt: Date.now() + this.config.kbNameCacheMs };
+		// 只在拿到真实名称时缓存；空结果（会话过期/限流）不缓存，避免把 ID 当名称锁 10 分钟。
+		if (names.size > 0) this.kbCache = { names, expiresAt: Date.now() + this.config.kbNameCacheMs };
 		return names;
 	}
 	/** 获取带 token 的会话（缓存 20 分钟；cookie 变了自动刷新）。 */
@@ -272,8 +281,28 @@ class ImaApi {
 			answer: fallback.answer
 		};
 	}
+	/** 问答节流：串行化请求，保证两次请求间隔 ≥ askCooldownMs，且每分钟不超过 askMaxPerMinute 次。 */
+	async throttleAsk() {
+		const run = this.askChain.then(async () => {
+			const now = Date.now();
+			this.askTimestamps = this.askTimestamps.filter((ts) => now - ts < 60_000);
+			if (this.askTimestamps.length >= this.config.askMaxPerMinute) {
+				const oldest = this.askTimestamps[0] ?? now;
+				const retryIn = Math.max(1, Math.ceil((60_000 - (now - oldest)) / 1000));
+				throw new Error(`提问过于频繁（每分钟最多 ${this.config.askMaxPerMinute} 次），请 ${retryIn} 秒后再试`);
+			}
+			const wait = this.lastAskAt + this.config.askCooldownMs - now;
+			if (wait > 0) await delay(wait);
+			const firedAt = Date.now();
+			this.lastAskAt = firedAt;
+			this.askTimestamps.push(firedAt);
+		});
+		this.askChain = run.catch(() => void 0);
+		await run;
+	}
 	/** 单个知识库问答（robotType 5），返回 {answer, references}。 */
 	async ask(question, kbId) {
+		await this.throttleAsk();
 		const robotType = this.config.robotType;
 		const kb = robotType === 5 ? kbId || (await this.credentials()).kbIds[0] : void 0;
 		if (robotType === 5 && !kb) throw new Error("缺少知识库 ID：请在 设置 → 插件 → IMA Copilot 中配置 IMA_KNOWLEDGE_BASE_IDS");

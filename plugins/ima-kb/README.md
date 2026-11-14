@@ -31,7 +31,8 @@
 
 - DSH ≥ 0.2.2-rc.1（使用 `webServer` 路由注册与 `credentials.resolve` 接口）；
   本包按 `dsh-v0.2.2-rc.3` 基线开发与验证。
-- IMA 凭证：在「设置 → 插件 → IMA Copilot」中填写（同 `dsh-ima-copilot`）。
+- IMA 凭证：本插件自带设置页（「设置 → IMA」），填写 `X-Ima-Cookie` / `X-Ima-Bkn` / 知识库 ID；
+  也可直接编辑 `~/.dsh/.credentials.yaml`。
 
 ## 一键本地集成
 
@@ -42,10 +43,29 @@ dsh plugin --profile web add <repo>/plugins/ima-kb
 dsh web
 ```
 
+也可以直接用安装脚本（自动定位仓库路径、执行安装、把 my_config 依赖规范回相对路径）：
+
+```powershell
+.\plugins\ima-kb\scripts\install.ps1          # 自动检测仓库
+.\plugins\ima-kb\scripts\install.ps1 -Repo "D:\code\deepseek-harness-master" -Profile web
+```
+
 - `dsh plugin` 会把本包以 pnpm 依赖形式装入 profile（`lib/` 为提交的预构建产物，
   **无需编译**）；本包的 `dsh.bundle.patch` 与 `dsh.client` 元数据会被 profile 自动装配。
 - 重启后浏览器刷新，左侧菜单即出现「IMA 知识库」。
 - 验证：`dsh --profile web --dump-config` 输出中应包含 `ima-kb`。
+
+### 直接使用仓库内 `my_config` 作为 profile
+
+本仓库 `my_config/web/package.json` 的依赖已改为相对路径 `file:../../plugins/ima-kb`，
+不需要改任何绝对路径。两种用法：
+
+1. 把 profile 目录指向 `my_config/web`（真实路径，如 `DSH_HOME=<repo>/my_config`）——相对路径直接生效；
+2. 用 junction 把 `~/.dsh/profiles/web` 指向 `my_config/web` 时，需再建一个 junction
+   `~/.dsh/plugins -> <repo>/plugins`（Windows：`mklink /J %USERPROFILE%\.dsh\plugins <repo>\plugins`），
+   让 `../../plugins/ima-kb` 在 junction 路径下也能解析。
+
+无论哪种方式，凭据都在「设置 → IMA」填写（写 `~/.dsh/.credentials.yaml`），实时生效。
 
 ## 目录结构
 
@@ -55,10 +75,31 @@ plugins/ima-kb/
 ├── cordis.patch.yml    # 宿主装配：注入 webServer + credentials，robotType=5
 ├── src/
 │   ├── index.js        # 宿主插件（IMA HTTP 客户端 + /api/ima/* 路由）
-│   └── client.js       # 浏览器插件（侧边栏图标 + 主面板）
+│   └── client.js       # 浏览器插件（侧边栏图标 + 主面板 + 设置页）
+├── tools/ima-mcp-server.mjs  # 可选：Agent 用的 MCP stdio 服务（随插件发布）
+├── assets/ima-home.svg       # 「IMA 网页」入口图标
 ├── lib/                # 预构建产物（已提交，一键集成直接使用）
 ├── scripts/sync.mjs    # src -> lib 同步（npm run build）
 └── README.md
+```
+
+## MCP（可选，供 Agent 调用）
+
+包内自带 `tools/ima-mcp-server.mjs`，在 profile 的 `cordis.patch.yml` 中注册即可（路径自动解析，不含绝对路径）：
+
+```yaml
+- insert:
+    - id: mcp-ima-kb
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ima
+        transport: stdio
+        command: !!js process.execPath
+        args:
+          - !!js (process.env.DSH_HOME || ((process.env.USERPROFILE || process.env.HOME) + '/.dsh')) + '/profiles/web/node_modules/@deepseek-ai/dsh-ima-kb/tools/ima-mcp-server.mjs'
+        cwd: !!js process.cwd()
+        toolCallTimeoutMs: 240000
+        failOnStartupError: false
 ```
 
 ## 宿主路由
@@ -74,6 +115,19 @@ plugins/ima-kb/
 
 > 文档列表必须走 `knowledge_tab_reader/get_knowledge_list`；`..._nl` 版本对个人知识库返回
 > `80100 暂无权限`。该接口 `limit` 上限为 50，传更大值会返回 `51 参数错误`。
+
+## 问答节流
+
+为避免触发 IMA 的「提问太快」限流，问答请求做了三层保护（在 profile 的 `cordis.patch.yml`
+的 `ima-kb.config` 中可调）：
+
+| 配置 | 默认 | 作用 |
+| --- | --- | --- |
+| `askCooldownMs` | 3000 | 两次问答请求的最小间隔（排队等待，不报错） |
+| `askMaxPerMinute` | 10 | 每分钟最多请求次数（超出直接返回「提问过于频繁」提示） |
+| `askIntervalMs` | 4000 | 多库组合问答时，每个库之间的间隔 |
+
+MCP 通道（`tools/ima-mcp-server.mjs`）同样带 3 秒冷却（`ASK_COOLDOWN_MS`）。
 
 ## 说明
 

@@ -22,6 +22,8 @@
     "src/index.js",
     "src/client.js",
     "assets/ima-home.svg",
+    "tools/ima-mcp-server.mjs",
+    "scripts/install.ps1",
     "cordis.patch.yml",
     "README.md"
   ],
