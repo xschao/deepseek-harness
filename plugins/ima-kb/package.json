@@ -21,6 +21,7 @@
     "lib/client.js",
     "src/index.js",
     "src/client.js",
+    "assets/ima-home.svg",
     "cordis.patch.yml",
     "README.md"
   ],

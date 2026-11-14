@@ -21,27 +21,18 @@
         toolCallTimeoutMs: 240000
         failOnStartupError: false
 
-# IMA Copilot 插件：robotType 5 = 知识库问答模式；10000 = IMA 通用问答。
-- id: ima-copilot
-  name: dsh-ima-copilot
-  config:
-    robotType: 5
-    requestTimeoutMs: 300000
-    retryCount: 3
-    concurrencyLimit: 1
-
-# IMA 知识库侧边栏插件（开发中，junction 指向 plugins/ima-kb）。
+# IMA 知识库侧边栏插件（junction 指向 plugins/ima-kb）。
 - id: ima-kb
   name: '@deepseek-ai/dsh-ima-kb'
   config:
     robotType: 5
     requestTimeoutMs: 300000
     maxUploadBytes: 26214400
+    askIntervalMs: 4000
 
 # 默认 Agent 模型（deepseek-official 走 DEEPSEEK_API_KEY，凭据在 ~/.dsh/.credentials.yaml）。
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: deepseek-official
-    model: deepseek-v4-pro
-    reasoningEffort: max
+    provider: deepseek-account
+    model: deepseek-flash

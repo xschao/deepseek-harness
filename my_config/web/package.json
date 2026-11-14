@@ -2,7 +2,6 @@
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
-    "dsh-ima-copilot": "^0.2.4",
     "@deepseek-ai/dsh-ima-kb": "file:F:/AITools/deepseek/deepseek-harness-master/plugins/ima-kb"
   },
   "dsh": {
@@ -10,7 +9,6 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
-        "dsh-ima-copilot",
         "@deepseek-ai/dsh-ima-kb"
       ]
     }

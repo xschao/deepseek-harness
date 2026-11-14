@@ -7,6 +7,10 @@
 import z from "@deepseek-ai/schemastery";
 import crypto from "node:crypto";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
+
+/** 侧边栏「IMA 网页」图标文件（随插件项目维护）。 */
+const ICON_FILE = path.resolve(import.meta.dirname, "..", "assets", "ima-home.svg");
 
 const CRED_COOKIE = "IMA_X_IMA_COOKIE";
 const CRED_BKN = "IMA_X_IMA_BKN";
@@ -20,7 +24,8 @@ const Config = z.object({
 	robotType: z.number().step(1).min(1).default(5),
 	requestTimeoutMs: z.number().step(1).min(1).default(300000),
 	maxUploadBytes: z.number().step(1).min(1).default(25 * 1024 * 1024),
-	kbNameCacheMs: z.number().step(1).min(1).default(600000)
+	kbNameCacheMs: z.number().step(1).min(1).default(600000),
+	askIntervalMs: z.number().step(1).min(0).default(4000)
 });
 
 export const inject = ["webServer", "credentials"];
@@ -87,13 +92,15 @@ const CONTENT_TYPES = {
 function readCompatible(value) {
 	return typeof value === "object" && value !== null && typeof value.get === "function" ? value.get() : value;
 }
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function normalizeConfig(config) {
 	const source = typeof config === "function" ? config() : config;
 	return {
 		robotType: readCompatible(source?.robotType) ?? 5,
 		requestTimeoutMs: readCompatible(source?.requestTimeoutMs) ?? 300000,
 		maxUploadBytes: readCompatible(source?.maxUploadBytes) ?? 25 * 1024 * 1024,
-		kbNameCacheMs: readCompatible(source?.kbNameCacheMs) ?? 600000
+		kbNameCacheMs: readCompatible(source?.kbNameCacheMs) ?? 600000,
+		askIntervalMs: readCompatible(source?.askIntervalMs) ?? 4000
 	};
 }
 
@@ -222,28 +229,41 @@ class ImaApi {
 		}
 		return { status: res.status, json, text };
 	}
-	/** 列出知识库文档。结构化接口对个人知识库常返回权限错误（code=80100），
-	 *  此时退化为问答式列举（自然语言文本）。 */
-	async listDocs(kbId) {
+	/** 列出知识库某层文档/文件夹。结构化接口不可用时退化为问答式列举。
+	 *  注意：knowledge_tab_reader_nl 版本对个人知识库返回 80100，必须用非 _nl 的 reader 接口。 */
+	async listDocs(kbId, folderId) {
 		const kb = kbId || (await this.credentials()).kbIds[0];
 		if (!kb) throw new Error("缺少知识库 ID：请在 设置 → 插件 → IMA Copilot 中配置 IMA_KNOWLEDGE_BASE_IDS");
-		const result = await this.api("/cgi-bin/knowledge_tab_reader_nl/get_knowledge_list", {
-			knowledge_base_id: kb,
-			limit: 50,
-			offset: 0
-		});
+		const body = { knowledge_base_id: kb, limit: 50, offset: 0 };
+		if (folderId !== undefined && folderId !== null && folderId !== "") body.folder_id = folderId;
+		const result = await this.api("/cgi-bin/knowledge_tab_reader/get_knowledge_list", body);
 		if (result.json?.code === 0) {
+			// IMA 只对部分文档返回可直接访问的绝对地址；其余是私有 COS key（需签名），网页端拿不到下载地址。
+			const asHttpUrl = (value) => (typeof value === "string" && /^https?:\/\//u.test(value) ? value : "");
 			const items = (result.json.knowledge_list ?? []).map((item) => ({
 				mediaId: item.media_id,
 				title: item.title,
 				mediaType: item.media_type,
+				mediaTypeName: item.media_type_info?.name,
 				fileSize: item.file_size,
 				parseProgress: item.parse_progress,
-				updateTime: item.update_time
+				updateTime: item.update_time,
+				folderId: item.media_type === 99 ? (item.folder_info?.folder_id ?? item.media_id) : undefined,
+				isFolder: item.media_type === 99,
+				downloadUrl: asHttpUrl(item.raw_file_url) || asHttpUrl(item.parsed_file_url) || asHttpUrl(item.jump_url)
 			}));
-			return { knowledgeBaseId: kb, structured: true, total: result.json.total_size ?? items.length, items };
+			return {
+				knowledgeBaseId: kb,
+				folderId: folderId ?? null,
+				structured: true,
+				total: items.length,
+				isEnd: result.json.is_end !== false,
+				path: result.json.current_path ?? [],
+				nextCursor: result.json.next_cursor ?? "",
+				items
+			};
 		}
-		// 个人知识库列表接口常返回权限错误，退化为让 IMA 自己列（结果是自然语言，可用）。
+		// 结构化接口不可用时退化为让 IMA 自己列（结果是自然语言，可用）。
 		const fallback = await this.ask("请列出当前知识库中的全部文档，逐条给出：标题、media_id（资料 ID）。", kb);
 		return {
 			knowledgeBaseId: kb,
@@ -295,12 +315,17 @@ class ImaApi {
 		const text = await qa.text();
 		return parseQaStream(text);
 	}
-	/** 多知识库组合问答：IMA 一次会话只绑一个库，因此对每个库各问一次（串行）并合并。 */
+	/** 多知识库组合问答：IMA 一次会话只绑一个库，因此对每个库各问一次（串行 + 间隔）并合并。 */
 	async askMultiple(question, kbIds) {
 		const bases = await this.resolveKnowledgeBases();
 		const nameOf = (id) => bases.find((entry) => entry.id === id)?.name ?? id;
+		// 先预热 token，避免每个请求各自触发一次 refresh。
+		await this.getSession();
+		// 串行提问并在两次请求之间留出间隔，避免连续请求触发 IMA 的「提问太快」限流。
 		const results = [];
-		for (const id of kbIds) {
+		for (let index = 0; index < kbIds.length; index += 1) {
+			const id = kbIds[index];
+			if (index > 0 && this.config.askIntervalMs > 0) await delay(this.config.askIntervalMs);
 			try {
 				const outcome = await this.ask(question, id);
 				results.push({
@@ -578,7 +603,7 @@ export function apply(ctx, config) {
 					robotType: config.robotType
 				};
 			})),
-			ctx.webServer.register(makeRoute("/api/ima/list", (payload) => api.listDocs(payload.knowledgeBaseId))),
+			ctx.webServer.register(makeRoute("/api/ima/list", (payload) => api.listDocs(payload.knowledgeBaseId, payload.folderId))),
 			ctx.webServer.register(makeRoute("/api/ima/ask", async (payload) => {
 				const question = (payload.question ?? "").trim();
 				if (question.length === 0) throw new Error("question 不能为空");
@@ -627,7 +652,33 @@ export function apply(ctx, config) {
 					throw new Error("mediaIds 必填");
 				}
 				return api.deleteDocs({ mediaIds: payload.mediaIds, kbId: payload.knowledgeBaseId });
-			}))
+			})),
+			// 侧边栏图标：assets/ima-home.svg（IMA 首页图标）。
+			ctx.webServer.register({
+				kind: "exact",
+				path: "/api/ima/icon",
+				handler: (req, res) => {
+					if (req.method !== "GET" && req.method !== "HEAD") {
+						res.writeHead(405, { allow: "GET, HEAD" });
+						res.end();
+						return;
+					}
+					readFile(ICON_FILE)
+						.then((bytes) => {
+							res.writeHead(200, {
+								"content-type": "image/svg+xml; charset=utf-8",
+								"content-length": String(bytes.length),
+								"cache-control": "no-cache"
+							});
+							res.end(req.method === "HEAD" ? void 0 : bytes);
+						})
+						.catch((error) => {
+							const message = error instanceof Error ? error.message : String(error);
+							res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+							res.end(`icon not found: ${message}`);
+						});
+				}
+			})
 		];
 		return () => {
 			for (const dispose of disposers) dispose();
