@@ -1,11 +1,13 @@
-# Your patch layer for this dsh profile, applied after every bundle layer:
-# a top-level YAML array of loader patch entries (id-targeted config
-# overrides, disables, and insert lists; `!!js` expressions allowed).
+# my_config/web/cordis.patch.yml — 项目的 DSH web profile 配置补丁层（随 git 管理）。
+# 关键插件配置都固化在这里；凭据与账号等敏感值仍留在 ~/.dsh/.credentials.yaml。
+# 修改后执行 dsh-restart 并刷新页面生效。
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
     welcomeNoticeVersion: 2026-09-28.1
-# ima-copilot: robotType 5 = knowledge-base mode; set 10000 in the bundle patch for IMA general assistant mode.
+
+# IMA 知识库 MCP（工具层问答，供 Agent 调用）。
+# 注意：node.exe 与 ima-mcp-server.mjs 为本机绝对路径，换环境需同步调整。
 - insert:
     - id: mcp-ima-kb
       name: '@deepseek-ai/dsh-mcp-client'
@@ -18,11 +20,28 @@
         cwd: 'F:\AITools\deepseek'
         toolCallTimeoutMs: 240000
         failOnStartupError: false
+
+# IMA Copilot 插件：robotType 5 = 知识库问答模式；10000 = IMA 通用问答。
+- id: ima-copilot
+  name: dsh-ima-copilot
+  config:
+    robotType: 5
+    requestTimeoutMs: 300000
+    retryCount: 3
+    concurrencyLimit: 1
+
+# IMA 知识库侧边栏插件（开发中，junction 指向 plugins/ima-kb）。
+- id: ima-kb
+  name: '@deepseek-ai/dsh-ima-kb'
+  config:
+    robotType: 5
+    requestTimeoutMs: 300000
+    maxUploadBytes: 26214400
+
+# 默认 Agent 模型（deepseek-official 走 DEEPSEEK_API_KEY，凭据在 ~/.dsh/.credentials.yaml）。
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: deepseek-official
     model: deepseek-v4-pro
     reasoningEffort: max
-
-# mcp-ima-kb: +folderId 参数（写入指定文件夹），2026-11-12 15:44

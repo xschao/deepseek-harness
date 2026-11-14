@@ -1,5 +1,9 @@
-# 运行时产物不提交（配置声明 package.json / cordis.patch.yml / pnpm-lock.yaml 提交）
-web/node_modules/
+# 提交：package.json / cordis.patch.yml / pnpm-lock.yaml，
+#      以及 node_modules 中被覆盖过的有用依赖本体（如打过补丁的 dsh-ima-copilot）。
+# 忽略：pnpm 虚 store 与安装状态、自动生成的合并配置、备份目录、指向仓库内插件的 junction。
+web/node_modules/.pnpm/
+web/node_modules/.modules.yaml
+web/node_modules/.pnpm-workspace-state*.json
+web/node_modules/@deepseek-ai/
 web/cordis.yml
-web/.pnpm-workspace-state*.json
-web/package.json.bak-*
+web/bak/
