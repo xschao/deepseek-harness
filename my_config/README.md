@@ -89,3 +89,17 @@ dsh web
    与本目录无关，切勿提交。
 5. junction 是 Windows 目录链接，普通用户即可创建；git 会把 junction 当作普通目录内容处理，
    请确认 `my_config\.gitignore` 未误伤需要提交的声明文件。
+
+## 变更说明
+
+`package.json` 用顶层 `"//"` 字段承载备注（JSON 没有注释语法；DSH 读取清单是 `JSON.parse` + 取
+`dsh.profile.bundles`，未知顶层字段会被忽略并在重写时保留）。`cordis.patch.yml` 的改动直接写在行内注释里。
+
+`package.json` / 其它 JSON 里写不了的细节记在这张表；**时间取文件真实修改时间**，便于对照 git 记录。
+
+| 时间 | 文件 | 改动 | 作用 | 依赖来源 |
+| --- | --- | --- | --- | --- |
+| 2026-11-15 16:15 | `web/package.json` | `dsh.profile.bundles` 增加 `@deepseek-ai/dsh-experimental-cot-translation-bundle` | 让客户端把模型的思维链按当前界面语言翻译后展示，而不是夹杂英文推理 | 来自 DSH 运行时安装 `~\.dsh\app\node_modules`，**不在** profile 的 `dependencies` 里，故 `my_config\web\node_modules` 下看不到它，属正常 |
+| 2026-11-15 16:15 | `web/cordis.patch.yml` | `agent-default-model.reasoningEffort: high` | 默认 Agent 用高强度推理，复杂改造/排错时更稳 | 无新增依赖；代价是延迟与 token 上升，可回落到 `medium` |
+| 2026-11-15 16:17 | `web/cordis.patch.yml` | 为 `mcp-ima-kb`（serverName/transport/command/args/cwd/超时/失败策略）与 `agent-default-model` 逐项补注释 | 说明每个字段的作用与取值原因，避免下次误改 | 无 |
+| 2026-11-15 16:25 | `web/package.json`、`my_config/README.md` | 给上述改动补中文备注与时间戳 | 让 `git add` 的每条新增内容都能自我解释 | 无 |

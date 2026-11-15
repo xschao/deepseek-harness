@@ -1,4 +1,5 @@
 {
+  "//": "DSH web profile 清单（~/.dsh/profiles/web 通过 junction 指向本目录）。dsh.profile.bundles 按顺序加载。【2026-11-15 修改】bundles 末尾新增 @deepseek-ai/dsh-experimental-cot-translation-bundle：让客户端把模型思维链按界面语言翻译后展示；该包由 DSH 运行时安装提供（~/.dsh/app/node_modules），不在本目录 node_modules 里，属正常。",
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
@@ -9,7 +10,8 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
-        "@deepseek-ai/dsh-ima-kb"
+        "@deepseek-ai/dsh-ima-kb",
+        "@deepseek-ai/dsh-experimental-cot-translation-bundle"
       ]
     }
   }

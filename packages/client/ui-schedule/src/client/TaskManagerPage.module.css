@@ -662,15 +662,20 @@
   margin-right: -8px;
 }
 
-/* The strip's icon controls are the 28px square targets other header icon
-   buttons use, not the sm capsule's 0 10px sides, on the header icon buttons'
-   quiet tertiary ink. */
+/* The strip's icon controls are larger than the 28px header targets used elsewhere:
+   pause/resume sits here, and a 28px target with a 16px glyph reads too small to hit
+   reliably, so the target is 36px and the glyph 20px on the same tertiary ink. */
 .detailIconButton {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.detailIconButton svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* 13/16 text with 13px below it, the Tasks page's own 44px bar, so the label

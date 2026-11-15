@@ -1,25 +1,39 @@
 # my_config/web/cordis.patch.yml — 项目的 DSH web profile 配置补丁层（随 git 管理）。
 # 关键插件配置都固化在这里；凭据与账号等敏感值仍留在 ~/.dsh/.credentials.yaml。
 # 修改后执行 dsh-restart 并刷新页面生效。
+#
+# 变更记录（未提交改动，按时间倒序；只记会影响运行行为的项）：
+#   2026-11-15  agent-default-model 新增 reasoningEffort: high —— 默认 Agent 用高强度推理，
+#               首字延迟与 token 消耗上升；dsh-restart 后生效，回落到 medium 即恢复。
+# 下面每个字段上方的注释说明"这项配置的作用"，不承担变更历史。
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
     welcomeNoticeVersion: 2026-09-28.1
 
 # IMA 知识库 MCP（工具层问答，供 Agent 调用）。
-# 使用 DSH 自带的 node（process.execPath）与插件包内的 tools/ima-mcp-server.mjs；
-# 路径按 DSH_HOME 自动解析（默认 ~/.dsh），换机器无需改绝对路径。
+# 为什么不写死路径：command 用 process.execPath（即运行 DSH 的那个 node），
+# args[0] 由 DSH_HOME 推出，全部是 !!js 表达式，换机器、换用户名、换 node 版本都不用改这份配置。
 - insert:
     - id: mcp-ima-kb
       name: '@deepseek-ai/dsh-mcp-client'
       config:
+        # 工具名前缀：模型侧看到的是 mcp__ima__* 这一组工具
         serverName: ima
+        # 本地子进程通信（stdin/stdout + JSON-RPC），不额外监听端口
         transport: stdio
+        # 用当前运行 DSH 的 node，避免 PATH 里另一个 node 版本导致原生模块 ABI 不匹配
         command: !!js process.execPath
+        # MCP server 脚本路径 = <DSH_HOME>/profiles/web/node_modules/@deepseek-ai/dsh-ima-kb/tools/ima-mcp-server.mjs
+        # DSH_HOME 未设置时回落 ~/.dsh（Windows 即 %USERPROFILE%\.dsh）；
+        # 插件装在 web profile 的 node_modules 下，所以路径里带 profiles/web 这一段。
         args:
           - !!js (process.env.DSH_HOME || ((process.env.USERPROFILE || process.env.HOME) + '/.dsh')) + '/profiles/web/node_modules/@deepseek-ai/dsh-ima-kb/tools/ima-mcp-server.mjs'
+        # 继承 DSH 的工作目录（F:\AITools\deepseek），让 MCP 侧解析相对路径时与主进程一致
         cwd: !!js process.cwd()
+        # 4 分钟：IMA 问答/上传要过网络和云端解析，超时设短会把正常调用判成失败
         toolCallTimeoutMs: 240000
+        # MCP 起不来时只让这批工具不可用，不拖垮整个 web profile
         failOnStartupError: false
 
 # IMA 知识库侧边栏插件（junction 指向 plugins/ima-kb）。
@@ -47,3 +61,6 @@
   config:
     provider: deepseek-account
     model: deepseek-flash
+    # 默认 Agent 的推理强度：high 让 deepseek-flash 在复杂改造/排查时多想几步，
+    # 代价是首字延迟变长、token 消耗增加；日常问答想省钱可降到 medium。
+    reasoningEffort: high
