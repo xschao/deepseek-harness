@@ -1,0 +1,4 @@
+# 把「下班烟花」挂进 Web GUI：一条 Host 行（工具）+ 一个 Client 模块（烟花层与工具卡片）。
+- insert:
+    - id: quit-fireworks
+      name: '@local/dsh-quit-fireworks'
