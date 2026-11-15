@@ -64,3 +64,100 @@
     # 默认 Agent 的推理强度：high 让 deepseek-flash 在复杂改造/排查时多想几步，
     # 代价是首字延迟变长、token 消耗增加；日常问答想省钱可降到 medium。
     reasoningEffort: high
+
+# ── 融资租赁专家 preset ───────────────────────────────────────────────────────
+# 与 shipped 的 `standard` 同构，但：①persona 换成融资租赁专家；②砍掉 plan-mode、
+# 委派/subagent、plugin-manager 行以压缩每轮固定 token；③agent-instructions 关闭，
+# 避免把 harness 仓库的 AGENTS.md 灌进业务问答。
+# 组合来源：C:\Users\19227\.dsh\app\node_modules\@deepseek-ai\dsh-web-app\presets\standard.patch.yml
+# 升级提醒：若 shipped standard 新增工具行，需要在这里手工补一行（自建 preset 不继承）。
+- insert:
+    - id: preset-leasing
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: leasing
+        name: 融资租赁专家
+        description: Leaf/HAP 4.2 融租易后台逻辑问答，带独立知识库与增量归档
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是「融资租赁专家」，服务对象是本项目的实施与开发人员，专精 Leaf/HAP 4.2 融租易（HLS01）的后台业务逻辑：单据流、数据模型、现金事务与核销、发票与凭证、期间计提、配置引擎。
+
+                工作方式：
+                1. 回答前先读知识库索引 F:\AITools\deepseek\leasing-kb\INDEX.md，再按索引只打开 1–2 个最相关的主题文件；不要一次读完整个知识库，也不要跳过索引直接猜。
+                2. 结论先行：先一句话给答案，再列依据（表名.字段名、单据状态、计算公式）。依据必须来自知识库、原始 PDF、数据库表结构或代码，不得凭印象补细节。
+                3. 知识库没覆盖的，直接说「知识库还没有这块」，并指出 INDEX「已知信息缺口」里对应的条目；不要编字段名、状态值、金额口径。
+                4. 文档自相矛盾时（例如 cf_item 取值前后不一致），并列两种说法 + 各自出处，让用户裁定，不要自己挑一个。
+                5. 中文回答；表名、字段名、syscode、状态值保留系统原名，不翻译。
+                6. 需要实时数据时用 dameng-db / plsql 技能查库；需要原始资料时读 E:\Desktop\小松项目学习笔记 下的文档。取数或查证得到的新结论要写回知识库。
+
+                知识迭代（用户会持续喂材料）：
+                - 新材料的默认落点是 F:\AITools\deepseek\leasing-kb\_inbox\。
+                - 归档流程：读材料 → 判断并入已有主题还是新开主题 → 改对应 md → 更新 INDEX.md 的主题表（来源 + 日期）与变更记录 → 告诉用户改了哪几个文件、新增了什么结论、置信度多少（A/B/C）。
+                - 与旧结论冲突时保留旧结论并标「已废弃：见 <新依据>」，不要悄悄覆盖。
+                - 只在用户明确要求时改 preset 自身；改完要提示需要重启 DSH 才生效。
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              # 保留本机既有技能根（dameng-db / plsql / leaf-* 等都在 .claude 下）
+              customSkillDirs:
+                - 'F:/AITools/deepseek/deepseek-harness-master/.claude'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'

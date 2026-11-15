@@ -3,7 +3,8 @@
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
-    "@deepseek-ai/dsh-ima-kb": "file:../../plugins/ima-kb"
+    "@deepseek-ai/dsh-ima-kb": "file:../../plugins/ima-kb",
+    "@local/dsh-leasing-entry": "file:../../plugins/leasing-entry"
   },
   "dsh": {
     "profile": {
@@ -11,7 +12,8 @@
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
         "@deepseek-ai/dsh-ima-kb",
-        "@deepseek-ai/dsh-experimental-cot-translation-bundle"
+        "@deepseek-ai/dsh-experimental-cot-translation-bundle",
+        "@local/dsh-leasing-entry"
       ]
     }
   }

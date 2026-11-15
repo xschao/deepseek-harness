@@ -1,0 +1,5 @@
+# 把「融资租赁专家」入口挂到左侧栏底部（sidebar.footer.action）。
+# startSession 由客户端调用，agentPreset 指向 profile 里已声明的 preset-leasing。
+- insert:
+    - id: leasing-entry
+      name: '@local/dsh-leasing-entry'

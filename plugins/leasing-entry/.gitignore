@@ -1,0 +1,4 @@
+# 本包提交预构建产物 lib/（仓库根 .gitignore 默认忽略 lib/，这里显式放行，
+# 以便 `dsh plugin --profile web add plugins/leasing-entry` 时无需编译即可一键安装）
+!lib/
+!lib/**
